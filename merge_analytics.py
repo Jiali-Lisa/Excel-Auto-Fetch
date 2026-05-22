@@ -3,28 +3,26 @@ import glob
 import re
 import pandas as pd
 
-# 硬编码绝对路径
-root_folder = '/Users/yiiing/Desktop/Work/Excel-Auto-Fetch/Students self-paced learning'
-output_file = '/Users/yiiing/Desktop/Work/Excel-Auto-Fetch/Final_All_Weeks_Analytics.xlsx'
+root_folder = './Students self-paced learning'
+output_file = './Final_All_Weeks_Analytics.xlsx'
 
 all_students_data = {}
 student_name_to_key = {}
 column_order = {}
 
 print("==================================================")
-print("🚀 超级明朗版脚本启动（全量 Header 监控模式）...")
-print("📍 目标路径:", root_folder)
+print("📍 Target folder:", root_folder)
 print("==================================================")
 
 if not os.path.exists(root_folder):
-    print("❌ 路径不存在，请检查！")
+    print("Path does not exist!")
     exit()
 
 all_folders = sorted(
     [f for f in os.listdir(root_folder) if os.path.isdir(os.path.join(root_folder, f)) and f.startswith('Week')],
     key=lambda x: int(''.join(filter(str.isdigit, x))) if any(char.isdigit() for char in x) else 0
 )
-print(f"扫描到根目录下的所有项: {all_folders}\n")
+print(f"Scanned all items in root directory: {all_folders}\n")
 
 
 def normalize_text(value):
@@ -55,7 +53,6 @@ def is_blank_value(value):
 
 
 def should_be_blank_in_output(value, col_name):
-    """判断值在输出中是否应该显示为空（如viewed列的no）"""
     if is_blank_value(value):
         return True
     text = str(value).strip().lower()
@@ -65,7 +62,6 @@ def should_be_blank_in_output(value, col_name):
 
 
 def find_target_sheets(xl):
-    """返回所有匹配的sheet列表，优先返回analytics per student，如果没有则返回analytics per learning step"""
     student_sheets = [sheet for sheet in xl.sheet_names if 'analytics per student' in sheet.lower()]
     if student_sheets:
         return student_sheets
@@ -144,35 +140,35 @@ for week_folder in all_folders:
         continue
 
     print(f"\n==================================================")
-    print(f"📂 正在全力处理文件夹: {week_folder}")
+    print(f"Processing: {week_folder}")
     print(f"==================================================")
 
     excel_files = sorted(glob.glob(os.path.join(week_path, "*.xlsx")))
-    print(f"📄 该 Week 目录下系统找到的 Excel 文件总数: {len(excel_files)} 个")
+    print(f"Total number of Excel files: {len(excel_files)}")
 
     for file_path in excel_files:
         file_name = os.path.splitext(os.path.basename(file_path))[0]
         if file_name.startswith('~$'):
-            print(f"   ⏭️  自动跳过 Excel 临时锁文件: {file_name}")
+            print(f"Skip: {file_name}")
             continue
 
-        print(f"\n   🔍 正在剖析文件: [{file_name}.xlsx]")
+        print(f"\n analysing [{file_name}.xlsx]")
 
         try:
             xl = pd.ExcelFile(file_path)
             target_sheets = find_target_sheets(xl)
             if not target_sheets:
-                print(f"      ⚠️  该文件找不到任何匹配的 Sheet 页！它包含的 Sheet 有: {xl.sheet_names}")
+                print(f"can't fine target sheet. This one includes {xl.sheet_names}")
                 continue
             
-            # 处理所有找到的sheet
+
             for target_sheet in target_sheets:
                 if 'analytics per learning step' in target_sheet.lower() and 'analytics per student' not in target_sheet.lower():
-                    print(f"      ℹ️  未找到 Student 页，已自动切换至 '{target_sheet}' 页")
+                    print(f"Did not find '{target_sheet}'")
                 df = pd.read_excel(file_path, sheet_name=target_sheet)
                 
                 df.columns = [str(col).strip() for col in df.columns]
-                print(f"      📋 本表【全部原始 Header】为:\n      👉 {list(df.columns)}")
+                print(f"Original header:\n      👉 {list(df.columns)}")
 
                 id_col = None
                 name_col = None
@@ -184,14 +180,14 @@ for week_folder in all_folders:
                         name_col = original_col
 
                 if not name_col:
-                    print(f"      ❌ [严重错误] 无法在这个 Header 列表里定位到学生姓名列！")
+                    print(f"Cannot find name column!")
                     continue
                 if not id_col:
-                    print(f"      ⚠️  未找到 Student ID 列，后续会只用姓名进行匹配")
+                    print(f"Cannot find ID column, will proceed with name only matching.")
 
                 exclude_keywords = ['student']
                 data_cols = [col for col in df.columns if col != id_col and col != name_col and not any(kw in col.lower() for kw in exclude_keywords)]
-                print(f"      📊 筛选出的【待汇总数据列】为: {data_cols}")
+                print(f"After filtering: {data_cols}")
 
                 week_digits = ''.join(filter(str.isdigit, week_folder))
                 week_short = f'W{week_digits}' if week_digits else week_folder
@@ -267,7 +263,7 @@ for week_folder in all_folders:
                             column_order[new_col_name] = len(column_order)
                         update_score(student_key, new_col_name, value)
         except Exception as e:
-            print(f"      ❌ 读取失败。错误原因: {e}")
+            print(f"Error: {e}")
             continue
 
 if all_students_data:
@@ -297,7 +293,7 @@ if all_students_data:
     
     final_df.to_excel(output_file, index=False)
     print(f"\n==================================================")
-    print(f"🎉 跑完了！全量监控后的总表已生成至:\n{output_file}")
+    print(f"🎉 Finished! The consolidated report has been generated at:\n{output_file}")
     print(f"==================================================")
 else:
-    print("\n❌ 结束：依然未能提取到任何有效的学生数据。")
+    print("\n❌ Ended: No valid student data could be extracted.")
